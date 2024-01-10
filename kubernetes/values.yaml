@@ -1,0 +1,10 @@
+operator:
+  image: registry.gitlab.com/breakwater/devops/operators/minio-resource-operator
+  version: 1ff14812
+  env:
+    - name: MINIO_ENDPOINT
+      value: ''
+    - name: MINIO_ACCESS_KEY
+      value: ''
+    - name: MINIO_SECRET_KEY
+      value: ''

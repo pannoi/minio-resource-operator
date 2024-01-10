@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "kubernetes.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "kubernetes.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "kubernetes.selectorLabels" . | nindent 8 }}
+    spec:
+      serviceAccountName: "{{ .Release.Name }}-service-account"
+      imagePullSecrets:
+        - name: gitlab-docker-registry
+      containers:
+        - name: {{ .Release.Name}}
+          image: "{{ .Values.operator.image }}:{{ .Values.operator.version }}"
+          imagePullPolicy: {{ .Values.operator.pullPolicy }}
+          {{- with .Values.operator.env }}
+          env:
+            {{- toYaml . | nindent 12 }}
+          {{- end}}
+          ports:
+            - name: http
+              containerPort: 65532
+              protocol: TCP
