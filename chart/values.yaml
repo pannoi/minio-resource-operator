@@ -1,6 +1,6 @@
 operator:
-  image: registry.gitlab.com/breakwater/devops/operators/minio-resource-operator
-  version: 1ff14812
+  image: pannoi/minio-resource-operator
+  version: 0.1.0
   env:
     - name: MINIO_ENDPOINT
       value: ''

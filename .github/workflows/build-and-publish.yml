@@ -1,4 +1,4 @@
-name: GitHub build image
+name: Build image and publish chart
 run-name: Build
 
 on:
@@ -35,3 +35,25 @@ jobs:
           file: ./Dockerfile
           push: true
           tags: ${{ steps.meta.outputs.tags }}
+
+  Publish:
+    runs-on: dtzar/helm-kubectl:3.9.1
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v4
+      
+      - name: Configure Git
+        run: |
+          git config user.name "pannoi"
+
+      - name: Package helm and publish
+        run: |
+          export ${{ DEPLOYMENT_TOKEN }}
+          helm package chart/
+          git clone https://github.com/pannoi/minio-resource-operator-helm.git
+          mv minio-resource-operator-${{ steps.meta.outputs.tags }}.tgz minio-resource-operator-helm 
+          helm repo index minio-resource-operator-helm
+          cd minio-resource-operator-helm
+          git add .
+          git commit -m "chore: upd version ${{ steps.meta.outputs.tags }}"
+          git push

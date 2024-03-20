@@ -1,6 +1,6 @@
 apiVersion: v2
-name: minio-resource-opereator
+name: minio-resource-operator
 description: Operator to maintain Minio resources via CRD
 type: application
 version: 0.1.0
-appVersion: "1.16.0"
+appVersion: 0.1.0
