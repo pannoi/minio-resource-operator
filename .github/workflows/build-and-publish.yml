@@ -48,7 +48,6 @@ jobs:
 
       - name: Package helm and publish
         run: |
-          export ${{ DEPLOYMENT_TOKEN }}
           helm package chart/
           git clone https://github.com/pannoi/minio-resource-operator-helm.git
           mv minio-resource-operator-${{ steps.meta.outputs.tags }}.tgz minio-resource-operator-helm 
