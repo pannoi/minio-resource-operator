@@ -6,8 +6,5 @@
   - docs/CHANGELOG.md
   - Add CR Statuses Conditions 
 
-### Fixed
-  - If secret exists in namespace, ignore issue
-
 ### Removed
   - Legacy files
