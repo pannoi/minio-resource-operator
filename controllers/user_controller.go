@@ -108,6 +108,18 @@ func (r *UserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 		return ctrl.Result{Requeue: true}, nil
 	}
 
+	existingSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      username + "-minio-credentials",
+			Namespace: req.Namespace,
+		},
+	}
+	err = r.Get(ctx, req.NamespacedName, existingSecret)
+	if err == nil {
+		log.Info("Kubernetes secret already exists: " + existingSecret.Name)
+		return ctrl.Result{}, nil
+	}
+
 	secretMap := make(map[string][]byte)
 	secretMap["accessKey"] = []byte(username)
 	secretMap["secretKey"] = []byte(password)
@@ -124,8 +136,6 @@ func (r *UserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 		Type: corev1.SecretType("generic"),
 		Data: secretMap,
 	}
-
-	// FIXME: Ignore if secret already exists
 
 	err = r.Create(ctx, secret, &client.CreateOptions{})
 	if err != nil {
