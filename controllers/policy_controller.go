@@ -8,6 +8,7 @@ import (
 
 	"github.com/minio/madmin-go"
 	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -50,14 +51,45 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		false,
 	)
 	if err != nil {
+		conditions := metav1.Condition{
+			Status: "Failed",
+			Reason: "Failed to connect to Minio",
+		}
+		policy.Status.Conditions = append(policy.Status.Conditions, conditions)
+		err = r.Status().Update(ctx, policy)
+		if err != nil {
+			log.Error(err, "Failed to update status conditions")
+			return ctrl.Result{}, err
+		}
 		log.Error(err, "Failed to connect to minio: "+minioEndpoint)
 		return ctrl.Result{}, err
 	}
 
 	err = mc.AddCannedPolicy(ctx, policy.Spec.Name, []byte(policy.Spec.Statement))
 	if err != nil {
+		conditions := metav1.Condition{
+			Status: "Failed",
+			Reason: "Failed create policy",
+		}
+		policy.Status.Conditions = append(policy.Status.Conditions, conditions)
+		err = r.Status().Update(ctx, policy)
+		if err != nil {
+			log.Error(err, "Failed to update status conditions")
+			return ctrl.Result{}, err
+		}
 		log.Error(err, "Failed to create policy: "+policy.Spec.Name)
 		return ctrl.Result{Requeue: true}, nil
+	}
+
+	conditions := metav1.Condition{
+		Status: "Ready",
+		Reason: "Ready",
+	}
+	policy.Status.Conditions = append(policy.Status.Conditions, conditions)
+	err = r.Status().Update(ctx, policy)
+	if err != nil {
+		log.Error(err, "Failed to update Bucket status")
+		return ctrl.Result{}, err
 	}
 
 	log.Info("Policy was created: " + policy.Spec.Name)

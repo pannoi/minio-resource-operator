@@ -9,8 +9,8 @@ type UserSpec struct {
 	Policies []string `json:"policies,omitempty"`
 }
 
-// TODO: Add status
 type UserStatus struct {
+	Conditions []metav1.Condition `json:"conditions"`
 }
 
 type User struct {

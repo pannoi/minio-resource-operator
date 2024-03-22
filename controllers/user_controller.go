@@ -65,6 +65,16 @@ func (r *UserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 		false,
 	)
 	if err != nil {
+		conditions := metav1.Condition{
+			Status: "Failed",
+			Reason: "Failed to connect to minio",
+		}
+		user.Status.Conditions = append(user.Status.Conditions, conditions)
+		err = r.Status().Update(ctx, user)
+		if err != nil {
+			log.Error(err, "Failed to update status conditions")
+			return ctrl.Result{}, err
+		}
 		log.Error(err, "Failed to connect to minio: "+minioEndpoint)
 		return ctrl.Result{}, err
 	}
@@ -84,6 +94,16 @@ func (r *UserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 
 	err = mc.AddUser(ctx, username, password)
 	if err != nil {
+		conditions := metav1.Condition{
+			Status: "Failed",
+			Reason: "Failed to create user in minio",
+		}
+		user.Status.Conditions = append(user.Status.Conditions, conditions)
+		err = r.Status().Update(ctx, user)
+		if err != nil {
+			log.Error(err, "Failed to update status conditions")
+			return ctrl.Result{}, err
+		}
 		log.Error(err, "Failed to create user: "+username)
 		return ctrl.Result{Requeue: true}, nil
 	}
@@ -109,6 +129,16 @@ func (r *UserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 
 	err = r.Create(ctx, secret, &client.CreateOptions{})
 	if err != nil {
+		conditions := metav1.Condition{
+			Status: "Failed",
+			Reason: "Failed to create secret",
+		}
+		user.Status.Conditions = append(user.Status.Conditions, conditions)
+		err = r.Status().Update(ctx, user)
+		if err != nil {
+			log.Error(err, "Failed to update status conditions")
+			return ctrl.Result{}, err
+		}
 		log.Error(err, "Failed to create secret with credentials: "+username)
 		return ctrl.Result{Requeue: true}, err
 	}
@@ -117,9 +147,30 @@ func (r *UserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 		for _, el := range user.Spec.Policies {
 			err = mc.SetPolicy(ctx, el, username, false)
 			if err != nil {
+				conditions := metav1.Condition{
+					Status: "Failed",
+					Reason: "Failed to attach policy",
+				}
+				user.Status.Conditions = append(user.Status.Conditions, conditions)
+				err = r.Status().Update(ctx, user)
+				if err != nil {
+					log.Error(err, "Failed to update status conditions")
+					return ctrl.Result{}, err
+				}
 				log.Error(err, "Failed to attach policy: "+el+" to user "+username)
 			}
 		}
+	}
+
+	conditions := metav1.Condition{
+		Status: "Ready",
+		Reason: "Ready",
+	}
+	user.Status.Conditions = append(user.Status.Conditions, conditions)
+	err = r.Status().Update(ctx, user)
+	if err != nil {
+		log.Error(err, "Failed to update status conditions")
+		return ctrl.Result{}, err
 	}
 
 	log.Info("User was created: " + username)

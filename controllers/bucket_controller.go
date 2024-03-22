@@ -15,6 +15,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	pannoiv1beta1 "minio-resource-operator/api/v1beta1"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 type BucketReconciler struct {
@@ -49,12 +51,32 @@ func (r *BucketReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		Secure: false,
 	})
 	if err != nil {
+		conditions := metav1.Condition{
+			Status: "Failed",
+			Reason: "Failed to connect to Minio",
+		}
+		bucket.Status.Conditions = append(bucket.Status.Conditions, conditions)
+		err = r.Status().Update(ctx, bucket)
+		if err != nil {
+			log.Error(err, "Failed to update Bucket status")
+			return ctrl.Result{}, err
+		}
 		log.Error(err, "Failed to connect to minio: "+minioEndpoint)
 		return ctrl.Result{}, err
 	}
 
 	found, err := mc.BucketExists(ctx, bucket.Spec.Name)
 	if err != nil {
+		conditions := metav1.Condition{
+			Status: "Failed",
+			Reason: "Failed to connect to Minio",
+		}
+		bucket.Status.Conditions = append(bucket.Status.Conditions, conditions)
+		err = r.Status().Update(ctx, bucket)
+		if err != nil {
+			log.Error(err, "Failed to update Bucket status")
+			return ctrl.Result{}, err
+		}
 		log.Error(err, "Cannot check if bucket exists")
 		return ctrl.Result{}, err
 	}
@@ -65,6 +87,16 @@ func (r *BucketReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 
 	err = mc.MakeBucket(context.Background(), bucket.Name, minio.MakeBucketOptions{ObjectLocking: bucket.Spec.ObjectLocking.Enabled})
 	if err != nil {
+		conditions := metav1.Condition{
+			Status: "Failed",
+			Reason: "Failed to create bucket",
+		}
+		bucket.Status.Conditions = append(bucket.Status.Conditions, conditions)
+		err = r.Status().Update(ctx, bucket)
+		if err != nil {
+			log.Error(err, "Failed to update Bucket status")
+			return ctrl.Result{}, err
+		}
 		log.Error(err, "Failed to create bucket: "+bucket.Spec.Name)
 		return ctrl.Result{Requeue: true}, err
 	}
@@ -85,6 +117,16 @@ func (r *BucketReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 
 		err = mc.SetObjectLockConfig(ctx, bucket.Spec.Name, &retentionMode, &retentionPeriod, &validityUnit)
 		if err != nil {
+			conditions := metav1.Condition{
+				Status: "Failed",
+				Reason: "Failed to enable object locking",
+			}
+			bucket.Status.Conditions = append(bucket.Status.Conditions, conditions)
+			err = r.Status().Update(ctx, bucket)
+			if err != nil {
+				log.Error(err, "Failed to update Bucket status")
+				return ctrl.Result{}, err
+			}
 			log.Error(err, "Failed to enable object locking for: "+bucket.Spec.Name)
 			return ctrl.Result{}, nil
 		}
@@ -93,9 +135,30 @@ func (r *BucketReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	if bucket.Spec.Versioning.Enabled {
 		err = mc.EnableVersioning(ctx, bucket.Spec.Name)
 		if err != nil {
+			conditions := metav1.Condition{
+				Status: "Failed",
+				Reason: "Failed to enable bucket versioning",
+			}
+			bucket.Status.Conditions = append(bucket.Status.Conditions, conditions)
+			err = r.Status().Update(ctx, bucket)
+			if err != nil {
+				log.Error(err, "Failed to update Bucket status")
+				return ctrl.Result{}, err
+			}
 			log.Error(err, "Failed to enable bucket versioning: "+bucket.Spec.Name)
 			return ctrl.Result{}, err
 		}
+	}
+
+	conditions := metav1.Condition{
+		Status: "Ready",
+		Reason: "Ready",
+	}
+	bucket.Status.Conditions = append(bucket.Status.Conditions, conditions)
+	err = r.Status().Update(ctx, bucket)
+	if err != nil {
+		log.Error(err, "Failed to update Bucket status")
+		return ctrl.Result{}, err
 	}
 
 	log.Info("Minio bucket was created: " + bucket.Spec.Name)

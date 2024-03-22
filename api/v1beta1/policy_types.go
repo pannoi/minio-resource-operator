@@ -9,8 +9,8 @@ type PolicySpec struct {
 	Statement string `json:"statement"`
 }
 
-// TODO: Insert PolicyStatus
 type PolicyStatus struct {
+	Conditions []metav1.Condition `json:"conditions"`
 }
 
 type Policy struct {

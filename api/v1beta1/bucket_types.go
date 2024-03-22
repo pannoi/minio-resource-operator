@@ -20,8 +20,8 @@ type VersioningSpec struct {
 	Enabled bool `json:"enabled,omitempty"`
 }
 
-// TODO: Insert status
 type BucketStatus struct {
+	Conditions []metav1.Condition `json:"conditions"`
 }
 
 type Bucket struct {
