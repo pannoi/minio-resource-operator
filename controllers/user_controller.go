@@ -1,25 +1,11 @@
-/*
-Copyright 2023.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
-
 package controllers
 
 import (
 	"context"
 	"math/rand"
+	"net/url"
 	"os"
+	"strings"
 
 	"github.com/minio/madmin-go"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -34,7 +20,6 @@ import (
 	pannoiv1beta1 "minio-resource-operator/api/v1beta1"
 )
 
-// UserReconciler reconciles a User object
 type UserReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
@@ -51,19 +36,6 @@ func generatePassword(l int) string {
 	return string(s)
 }
 
-//+kubebuilder:rbac:groups=pannoi,resources=users,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=pannoi,resources=users/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=pannoi,resources=users/finalizers,verbs=update
-
-// Reconcile is part of the main kubernetes reconciliation loop which aims to
-// move the current state of the cluster closer to the desired state.
-// TODO(user): Modify the Reconcile function to compare the state specified by
-// the User object against the actual cluster state, and then
-// perform operations to make the cluster state reflect the state specified by
-// the user.
-//
-// For more details, check Reconcile and its Result here:
-// - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.14.1/pkg/reconcile
 func (r *UserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
 
@@ -78,14 +50,32 @@ func (r *UserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 		return ctrl.Result{}, err
 	}
 
+	var minioEndpoint string
+	if strings.Contains(os.Getenv("MINIO_ENDPOINT"), "http") {
+		minioHost, _ := url.Parse(os.Getenv("MINIO_ENDPOINT"))
+		minioEndpoint = minioHost.Host
+	} else {
+		minioEndpoint = os.Getenv("MINIO_ENDPOINT")
+	}
+
 	mc, err := madmin.New(
-		os.Getenv("MINIO_ENDPOINT"),
+		minioEndpoint,
 		os.Getenv("MINIO_ACCESS_KEY"),
 		os.Getenv("MINIO_SECRET_KEY"),
 		false,
 	)
 	if err != nil {
-		log.Error(err, "Failed to connect to minio: "+os.Getenv("MINIO_ENDPOINT"))
+		conditions := metav1.Condition{
+			Status: "Failed",
+			Reason: "Failed to connect to minio",
+		}
+		user.Status.Conditions = append(user.Status.Conditions, conditions)
+		err = r.Status().Update(ctx, user)
+		if err != nil {
+			log.Error(err, "Failed to update status conditions")
+			return ctrl.Result{}, err
+		}
+		log.Error(err, "Failed to connect to minio: "+minioEndpoint)
 		return ctrl.Result{}, err
 	}
 
@@ -104,6 +94,16 @@ func (r *UserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 
 	err = mc.AddUser(ctx, username, password)
 	if err != nil {
+		conditions := metav1.Condition{
+			Status: "Failed",
+			Reason: "Failed to create user in minio",
+		}
+		user.Status.Conditions = append(user.Status.Conditions, conditions)
+		err = r.Status().Update(ctx, user)
+		if err != nil {
+			log.Error(err, "Failed to update status conditions")
+			return ctrl.Result{}, err
+		}
 		log.Error(err, "Failed to create user: "+username)
 		return ctrl.Result{Requeue: true}, nil
 	}
@@ -127,6 +127,16 @@ func (r *UserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 
 	err = r.Create(ctx, secret, &client.CreateOptions{})
 	if err != nil {
+		conditions := metav1.Condition{
+			Status: "Failed",
+			Reason: "Failed to create secret",
+		}
+		user.Status.Conditions = append(user.Status.Conditions, conditions)
+		err = r.Status().Update(ctx, user)
+		if err != nil {
+			log.Error(err, "Failed to update status conditions")
+			return ctrl.Result{}, err
+		}
 		log.Error(err, "Failed to create secret with credentials: "+username)
 		return ctrl.Result{Requeue: true}, err
 	}
@@ -135,16 +145,36 @@ func (r *UserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 		for _, el := range user.Spec.Policies {
 			err = mc.SetPolicy(ctx, el, username, false)
 			if err != nil {
+				conditions := metav1.Condition{
+					Status: "Failed",
+					Reason: "Failed to attach policy",
+				}
+				user.Status.Conditions = append(user.Status.Conditions, conditions)
+				err = r.Status().Update(ctx, user)
+				if err != nil {
+					log.Error(err, "Failed to update status conditions")
+					return ctrl.Result{}, err
+				}
 				log.Error(err, "Failed to attach policy: "+el+" to user "+username)
 			}
 		}
+	}
+
+	conditions := metav1.Condition{
+		Status: "Ready",
+		Reason: "Ready",
+	}
+	user.Status.Conditions = append(user.Status.Conditions, conditions)
+	err = r.Status().Update(ctx, user)
+	if err != nil {
+		log.Error(err, "Failed to update status conditions")
+		return ctrl.Result{}, err
 	}
 
 	log.Info("User was created: " + username)
 	return ctrl.Result{}, nil
 }
 
-// SetupWithManager sets up the controller with the Manager.
 func (r *UserReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&pannoiv1beta1.User{}).
