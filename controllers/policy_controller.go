@@ -2,7 +2,9 @@ package controllers
 
 import (
 	"context"
+	"net/url"
 	"os"
+	"strings"
 
 	"github.com/minio/madmin-go"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -33,14 +35,22 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		return ctrl.Result{}, err
 	}
 
+	var minioEndpoint string
+	if strings.Contains(os.Getenv("MINIO_ENDPOINT"), "http") {
+		minioHost, _ := url.Parse(os.Getenv("MINIO_ENDPOINT"))
+		minioEndpoint = minioHost.Host
+	} else {
+		minioEndpoint = os.Getenv("MINIO_ENDPOINT")
+	}
+
 	mc, err := madmin.New(
-		os.Getenv("MINIO_ENDPOINT"),
+		minioEndpoint,
 		os.Getenv("MINIO_ACCESS_KEY"),
 		os.Getenv("MINIO_SECRET_KEY"),
 		false,
 	)
 	if err != nil {
-		log.Error(err, "Failed to connect to minio: "+os.Getenv("MINIO_ENDPOINT"))
+		log.Error(err, "Failed to connect to minio: "+minioEndpoint)
 		return ctrl.Result{}, err
 	}
 
