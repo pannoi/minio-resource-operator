@@ -16,7 +16,8 @@ It was created in case of [issue](https://github.com/minio/operator/issues/1100)
 You need to set minio tenant configuration (endpoint and credentials) in `values.yaml`
 
 ```yaml
-env:
+operator:
+  env:
     - name: MINIO_ENDPOINT
       value: ''
     - name: MINIOT_ACCESS_KEY
